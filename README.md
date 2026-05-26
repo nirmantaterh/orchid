@@ -1,6 +1,6 @@
 # Orchid
 
-Orchid is a multi-agent orchestration framework that adapts its strategy mid-run. Named after one of the most adaptive plant families on earth — orchids survive across wildly different environments by adjusting how they grow. Orchid does the same: when an execution fails, it doesn't restart from scratch. It critiques, reflects, replans, and tries again.
+Orchid is a multi-agent orchestration framework that adapts its strategy mid-run. Named after one of the most adaptive plant families on earth: orchids survive across wildly different environments by adjusting how they grow. Orchid does the same. When an execution fails, it doesn't restart from scratch. It critiques, reflects, replans, and tries again.
 
 Built from scratch in Python. No LangChain. No LlamaIndex. Runs fully local via [Ollama](https://ollama.com).
 
@@ -11,17 +11,17 @@ Built from scratch in Python. No LangChain. No LlamaIndex. Runs fully local via 
 A raw user goal passes through seven specialized agents in a loop:
 
 ```
-GoalInterpreter → Planner → Executor → Critic → Reflection → MemoryManager → Controller
+GoalInterpreter -> Planner -> Executor -> Critic -> Reflection -> MemoryManager -> Controller
 ```
 
 Each agent reads from and writes to a shared immutable state (`AgentState`). The Controller decides at each iteration whether to `terminate`, `replan`, `continue`, or hand off to a `specialist`. The loop runs until the task is done or max iterations are reached.
 
 Additional systems layered on top:
-- **Tracer** — per-agent spans with latency and confidence, exportable to JSON or SQLite
-- **Confidence system** — tracks per-agent confidence trends; forces replan when confidence drops
-- **Debate panel** — two independent critics synthesize when confidence variance is high
-- **Dynamic specialists** — 7 specialist agent types created on demand for blocked sub-problems
-- **Visualization** — Mermaid flowchart of the agent graph
+- **Tracer**: per-agent spans with latency and confidence, exportable to JSON or SQLite
+- **Confidence system**: tracks per-agent confidence trends; forces replan when confidence drops
+- **Debate panel**: two independent critics synthesize when confidence variance is high
+- **Dynamic specialists**: 7 specialist agent types created on demand for blocked sub-problems
+- **Visualization**: Mermaid flowchart of the agent graph
 
 ---
 
@@ -31,10 +31,10 @@ Validated against 8 tasks across 4 difficulty tiers using `gemma4:e4b` on CPU (n
 
 | Set | Tasks | Result |
 |-----|-------|--------|
-| A — Simple (summarization, Q&A) | 2 | 2/2 |
-| B — Medium (study plan, repo analysis) | 2 | 2/2 |
-| C — Hard (research, system design, debugging) | 3 | 3/3 |
-| D — Long Horizon (multi-step SaaS planning) | 1 | 1/1 |
+| A - Simple (summarization, Q&A) | 2 | 2/2 |
+| B - Medium (study plan, repo analysis) | 2 | 2/2 |
+| C - Hard (research, system design, debugging) | 3 | 3/3 |
+| D - Long Horizon (multi-step SaaS planning) | 1 | 1/1 |
 | **Total** | **8** | **8/8** |
 
 ---
@@ -94,3 +94,9 @@ evaluation/          benchmark runner, 13 metrics
 tracing/             span tracer (JSON / SQLite)
 visualization/       Mermaid graph builder
 ```
+
+---
+
+## License
+
+Apache 2.0. See [LICENSE](LICENSE).
