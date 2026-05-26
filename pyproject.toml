@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "goal-interpreter"
+version = "0.1.0"
+description = "LLM-agnostic Goal Interpreter for adaptive agent systems"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.0"]
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.25"]
+openai = ["openai>=1.0"]
+dev = ["pytest>=8.0", "pydantic>=2.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
