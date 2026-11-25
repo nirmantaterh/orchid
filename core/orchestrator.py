@@ -1,3 +1,5 @@
+from typing import Callable
+
 from goal_interpreter import GoalInterpreter
 from goal_interpreter.providers.base import BaseLLMProvider
 
@@ -15,6 +17,20 @@ from tracing.tracer import Tracer
 from tracing.trace_schema import MemoryUpdateRecord
 
 
+# (state, proposed action) -> the action to take. Return the proposed action to approve it.
+Approver = Callable[[AgentState, str], str]
+
+HUMAN_ACTIONS = ("continue", "replan", "terminate")
+
+
+def console_approver(state: AgentState, action: str) -> str:
+    """Asks a person at the terminal to approve or override the controller."""
+    signal = state.control_signal
+    print(f"\nIteration {state.iteration}: controller proposes {action!r} ({signal.reason}), confidence {signal.agent_confidence:.2f}")
+    answer = input("Enter to approve, or c / r / t to continue, replan or terminate: ").strip().lower()
+    return {"c": "continue", "r": "replan", "t": "terminate"}.get(answer, action)
+
+
 class Orchestrator:
     """
     Main execution loop.
@@ -28,6 +44,8 @@ class Orchestrator:
       - AgentFactory for adaptive specialist creation
       - DebatePanel triggered when agent confidence variance is high
       - Automatic replan when confidence drops across consecutive iterations
+      - Optional human approval: an approver confirms every terminate and any
+        decision made below approval_threshold confidence
     """
 
     # Variance threshold above which debate is triggered
@@ -41,11 +59,15 @@ class Orchestrator:
         max_iterations: int = 10,
         enable_debate: bool = True,
         debate_threshold: float = 0.25,
+        approver: Approver | None = None,
+        approval_threshold: float = 0.5,
     ) -> None:
         self._provider = provider
         self._max_iterations = max_iterations
         self._enable_debate = enable_debate
         self._debate_threshold = debate_threshold
+        self._approver = approver
+        self._approval_threshold = approval_threshold
         self._logger = get_logger("orchestrator")
 
         self._interpreter = GoalInterpreter(provider)
@@ -85,6 +107,11 @@ class Orchestrator:
                     "Confidence drop detected — forcing replan",
                     iteration=state.iteration)
                 action = "replan"
+
+            action = self._ask_human(state, action)
+            if action != state.control_signal.action:
+                state = state.model_copy(update={"control_signal": state.control_signal.model_copy(
+                    update={"action": action, "reason": f"Override: {action}"})})
 
             # Record iteration in tracer
             memory_update = self._build_memory_update_record(state)
@@ -126,6 +153,20 @@ class Orchestrator:
             iterations=state.iteration,
             final_action=state.control_signal.action)
         return state, tracer
+
+    def _ask_human(self, state: AgentState, action: str) -> str:
+        """Routes terminates and low-confidence decisions to the approver, if one is set."""
+        if self._approver is None:
+            return action
+        if action != "terminate" and state.control_signal.agent_confidence >= self._approval_threshold:
+            return action
+        answer = self._approver(state, action)
+        if answer not in HUMAN_ACTIONS:
+            log(self._logger, "info", "Ignoring invalid approver answer", answer=answer)
+            return action
+        if answer != action:
+            log(self._logger, "info", "Human override", proposed=action, chosen=answer)
+        return answer
 
     # ── Iteration ─────────────────────────────────────────────────────────────
 

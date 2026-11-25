@@ -262,3 +262,39 @@ def test_memory_persists_across_iterations():
     state, _ = orch.run("Build a recommendation engine")
 
     assert "naive approach" in state.memory.failed_strategies
+
+
+# ── Human approval ────────────────────────────────────────────────────────────
+
+def test_human_can_override_terminate_with_replan():
+    """The approver sees each proposed terminate; overriding it forces another planned pass."""
+    provider = SequentialProvider([
+        goal_response(),
+        plan_response(), exec_response("partial"), critique_response(6),
+        reflection_response(), memory_response(), control_response("terminate"),
+        # Human rejected the terminate → planner runs again
+        plan_response(), exec_success_response(), critique_response(9),
+        reflection_response(), memory_response(), control_response("terminate"),
+    ])
+    seen = []
+
+    def approver(state, action):
+        seen.append(action)
+        return "replan" if len(seen) == 1 else action
+
+    state, _ = Orchestrator(provider, max_iterations=5, approver=approver).run("Build a recommendation engine")
+
+    assert seen == ["terminate", "terminate"]
+    assert len(state.history) == 2
+    assert state.control_signal.action == "terminate"
+
+
+def test_invalid_human_answer_keeps_controller_decision():
+    provider = SequentialProvider([
+        goal_response(), plan_response(), exec_success_response(), critique_response(9),
+        reflection_response(), memory_response(), control_response("terminate"),
+    ])
+    state, _ = Orchestrator(provider, max_iterations=5, approver=lambda s, a: "explode").run("x")
+
+    assert len(state.history) == 1
+    assert state.control_signal.action == "terminate"
