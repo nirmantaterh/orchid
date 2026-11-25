@@ -108,10 +108,16 @@ class Orchestrator:
                     iteration=state.iteration)
                 action = "replan"
 
+            proposed = action
             action = self._ask_human(state, action)
-            if action != state.control_signal.action:
-                state = state.model_copy(update={"control_signal": state.control_signal.model_copy(
-                    update={"action": action, "reason": f"Override: {action}"})})
+            if action != proposed:
+                # Kept on the state so the controller sees what a human rejected.
+                state = state.model_copy(update={
+                    "control_signal": state.control_signal.model_copy(
+                        update={"action": action, "reason": f"Human override: {action}"}),
+                    "human_overrides": [*state.human_overrides,
+                                        f"Iteration {state.iteration}: you proposed {proposed}, a human chose {action}"],
+                })
 
             # Record iteration in tracer
             memory_update = self._build_memory_update_record(state)

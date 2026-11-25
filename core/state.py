@@ -151,6 +151,7 @@ class AgentState(BaseModel):
     history: list[IterationRecord] = []
     trace: list[TraceEntry] = []
     debate_log: list[DebateResult] = []
+    human_overrides: list[str] = []
 
     # ── Factory ───────────────────────────────────────────────────────────────
 

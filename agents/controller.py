@@ -5,7 +5,10 @@ from .base import BaseAgent
 
 _SYSTEM = """You are the Controller in an adaptive multi-agent system.
 
-You are the meta-decision-maker. After every full iteration you decide what happens next.
+You are the meta-decision-maker. After every full iteration you propose what happens next.
+When human approval is on, a person confirms every terminate and any low-confidence decision,
+and may override it. Treat past human overrides as authoritative feedback: do not propose a
+decision a human rejected again unless the results have clearly changed since.
 
 Available actions:
   "continue"   — the current plan is working; execute the next cycle with it.
@@ -81,6 +84,9 @@ class ControllerAgent(BaseAgent):
             "",
             "=== RECURRING BLOCKERS ===",
             json.dumps(list(set(recent_blockers)), indent=2),
+            "",
+            "=== HUMAN OVERRIDES (most recent last) ===",
+            *(state.human_overrides[-3:] or ["None"]),
             "",
             "=== MEMORY SUMMARY ===",
             f"Failed strategies: {len(state.memory.failed_strategies)}",

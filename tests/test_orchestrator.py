@@ -277,6 +277,9 @@ def test_human_can_override_terminate_with_replan():
         reflection_response(), memory_response(), control_response("terminate"),
     ])
     seen = []
+    prompts = []
+    generate = provider.generate
+    provider.generate = lambda system, user: (prompts.append(user), generate(system, user))[1]
 
     def approver(state, action):
         seen.append(action)
@@ -286,6 +289,9 @@ def test_human_can_override_terminate_with_replan():
 
     assert seen == ["terminate", "terminate"]
     assert len(state.history) == 2
+    assert state.human_overrides == ["Iteration 0: you proposed terminate, a human chose replan"]
+    # The controller's next prompt carries the override as feedback.
+    assert "a human chose replan" in prompts[-1]
     assert state.control_signal.action == "terminate"
 
 
