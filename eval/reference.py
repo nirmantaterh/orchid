@@ -46,6 +46,8 @@ def reference_answer(task: dict) -> str:
         return f"```python\n{CODE_REF[task['func']]}```"
     if kind == "format":
         return FORMAT_REF[task["id"]]
+    if kind == "code_script":
+        return f"```python\n{task['reference']}\n```"
     raise ValueError(kind)
 
 

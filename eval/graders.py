@@ -160,6 +160,39 @@ def grade_code(task: dict, full_text: str, final_text: str, timeout_s: int = 10)
     return ok, detail
 
 
+_SCRIPT_RUNNER = r'''
+import sys
+with open(sys.argv[1], encoding="utf-8") as fh:
+    src = fh.read()
+exec(compile(src, "candidate_and_tests", "exec"), {"__name__": "__main__"})
+print("ALL_TESTS_PASSED")
+'''
+
+
+def grade_code_script(task: dict, full_text: str, final_text: str, timeout_s: int = 15) -> tuple[bool, str]:
+    """Public-benchmark code tasks: candidate + the benchmark's own assert-based tests."""
+    code = extract_code(full_text, task["func"])
+    if code is None:
+        return False, f"no definition of {task['func']}() found"
+    program = "\n".join([task.get("prefix", ""), code, "", task["test_code"]])
+    with tempfile.TemporaryDirectory() as d:
+        prog_p = os.path.join(d, "program.py")
+        run_p = os.path.join(d, "runner.py")
+        for p, content in ((prog_p, program), (run_p, _SCRIPT_RUNNER)):
+            with open(p, "w", encoding="utf-8") as fh:
+                fh.write(content)
+        try:
+            proc = subprocess.run([sys.executable, "-I", run_p, prog_p],
+                                  capture_output=True, text=True, timeout=timeout_s, cwd=d)
+        except subprocess.TimeoutExpired:
+            return False, f"timed out after {timeout_s}s"
+    if "ALL_TESTS_PASSED" in proc.stdout:
+        return True, "all benchmark tests passed"
+    err = (proc.stderr or "").strip().splitlines()
+    last = err[-1] if err else "no output"
+    return False, ("tests failed: " if "AssertionError" in last else "crashed: ") + last[:150]
+
+
 # ── Format checks (use final_text: what the user would actually see last) ────
 
 def _lines(text: str) -> list[str]:
@@ -256,6 +289,7 @@ GRADERS = {
     "number": grade_number,
     "text": grade_text,
     "code": grade_code,
+    "code_script": grade_code_script,
     "format": grade_format,
 }
 

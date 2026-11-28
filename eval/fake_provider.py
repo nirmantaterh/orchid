@@ -13,7 +13,7 @@ from eval.tasks import TASKS
 
 def _find_task(user: str):
     for t in TASKS:
-        if t["prompt"][:120] in user:
+        if t["prompt"] in user:
             return t
     return None
 
@@ -24,7 +24,7 @@ def _wrong(task: dict) -> str:
         return f"ANSWER: {task['answer'] + 1}"
     if k == "text":
         return "ANSWER: I am not sure"
-    if k == "code":
+    if k in ("code", "code_script"):
         return f"```python\ndef {task['func']}(*args):\n    return None\n```"
     return "Sure! Here is my answer:\n" + reference_answer(task)
 

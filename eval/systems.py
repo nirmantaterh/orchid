@@ -13,6 +13,37 @@ from goal_interpreter.providers.base import BaseLLMProvider
 BASELINE_SYSTEM = "You are a helpful assistant. Follow the user's instructions exactly."
 
 
+_RETRYABLE = ("429", "rate", "500", "502", "503", "504", "overloaded", "timeout", "timed out",
+              "connection", "temporarily")
+
+
+class RetryProvider(BaseLLMProvider):
+    """Retries rate-limit and server errors with exponential backoff (free API tiers need this)."""
+
+    def __init__(self, inner: BaseLLMProvider, retries: int = 6, base_delay: float = 5.0,
+                 sleep=time.sleep) -> None:
+        self._inner = inner
+        self._retries = retries
+        self._base = base_delay
+        self._sleep = sleep
+        self.retry_count = 0
+
+    def generate(self, system: str, user: str) -> str:
+        for attempt in range(self._retries + 1):
+            try:
+                out = self._inner.generate(system, user)
+                if out is None:
+                    raise RuntimeError("empty response (None) from server, temporarily unavailable")
+                return out
+            except Exception as exc:
+                msg = str(exc).lower()
+                if attempt == self._retries or not any(k in msg for k in _RETRYABLE):
+                    raise
+                self.retry_count += 1
+                self._sleep(min(120.0, self._base * 2 ** attempt))
+        raise RuntimeError("unreachable")
+
+
 class CountingProvider(BaseLLMProvider):
     """Wraps a provider and records how many calls were made and how big they were."""
 

@@ -14,6 +14,19 @@ def test_task_ids_unique():
     assert len(TASKS) == len(TASKS_BY_ID)
 
 
+def test_public_benchmarks_loaded():
+    from collections import Counter
+    c = Counter(t["category"] for t in TASKS)
+    assert c["gsm8k"] == 50 and c["humaneval"] == 50 and c["mbpp"] == 40
+    assert all(t["func"] for t in TASKS if t["kind"] == "code_script")
+
+
+def test_code_script_rejects_wrong_solution():
+    t = next(t for t in TASKS if t["category"] == "humaneval")
+    ok, _ = grade(t, f"```python\ndef {t['func']}(*a, **k):\n    return None\n```", "")
+    assert not ok
+
+
 @pytest.mark.parametrize("task", TASKS, ids=lambda t: t["id"])
 def test_reference_answer_passes(task):
     """A known-correct answer must pass every grader. Guards against wrong answer keys."""
@@ -118,3 +131,27 @@ def test_extract_json_keeps_code_fences_inside_strings():
     from core.state import extract_json
     raw = json.dumps({"output": "```python\ndef f():\n    return 1\n```", "ok": True})
     assert json.loads(extract_json(raw))["ok"] is True
+
+
+def test_retry_provider_retries_rate_limits_only():
+    from eval.systems import RetryProvider
+
+    class Flaky:
+        def __init__(self, errors):
+            self.errors = list(errors)
+            self.calls = 0
+
+        def generate(self, s, u):
+            self.calls += 1
+            if self.errors:
+                raise self.errors.pop(0)
+            return "ok"
+
+    f = Flaky([RuntimeError("Error code: 429 rate limited"), RuntimeError("503 overloaded")])
+    assert RetryProvider(f, retries=3, sleep=lambda s: None).generate("", "") == "ok"
+    assert f.calls == 3
+
+    g = Flaky([ValueError("bad request: invalid model")])
+    with pytest.raises(ValueError):
+        RetryProvider(g, retries=3, sleep=lambda s: None).generate("", "")
+    assert g.calls == 1

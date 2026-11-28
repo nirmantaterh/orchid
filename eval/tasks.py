@@ -7,9 +7,15 @@ Every task has an answer that can be checked without asking an LLM:
   - "code":   a Python function, run against hidden test cases
   - "format": an instruction-following check done in plain Python
 
-Categories: math, facts, logic, code, format.
-Answers were checked in code (see tests/test_eval.py).
+Categories: math, facts, logic, code, format (66 hand-written tasks), plus
+fixed samples from public benchmarks in eval/data (built by
+eval/build_public_tasks.py): gsm8k (50), humaneval (50), mbpp (40).
+Every reference answer is checked against its grader in tests/test_eval.py.
 """
+import json
+from pathlib import Path
+
+_DATA = Path(__file__).resolve().parent / "data"
 
 ANSWER_SUFFIX = (
     "\n\nEnd your response with one final line in exactly this form:\n"
@@ -165,5 +171,40 @@ FORMAT = [
          "sorted_lines", n=4),
 ]
 
-TASKS = MATH + FACTS + LOGIC + CODE + FORMAT
+def _load(name: str) -> list[dict]:
+    p = _DATA / f"{name}.jsonl"
+    if not p.exists():
+        return []
+    return [json.loads(l) for l in p.read_text(encoding="utf-8").splitlines() if l.strip()]
+
+
+GSM8K = [
+    {"id": r["id"], "category": "gsm8k", "kind": "number", "source": "GSM8K",
+     "prompt": r["question"] + ANSWER_SUFFIX, "answer": r["answer"], "tol": 1e-6}
+    for r in _load("gsm8k")
+]
+
+HUMANEVAL = [
+    {"id": r["id"], "category": "humaneval", "kind": "code_script", "source": "HumanEval",
+     "prompt": ("Complete this Python function. Return the whole function, including the "
+                "signature, plus any imports or helper functions it needs.\n\n"
+                f"```python\n{r['prompt']}```" + CODE_SUFFIX),
+     "func": r["func"], "prefix": r["prefix"], "test_code": r["test_code"],
+     "reference": r["reference"]}
+    for r in _load("humaneval")
+]
+
+MBPP = [
+    {"id": r["id"], "category": "mbpp", "kind": "code_script", "source": "MBPP",
+     "prompt": (f"{r['text']}\nYour code should pass this test:\n{r['first_test']}" + CODE_SUFFIX),
+     "func": r["func"], "prefix": r["prefix"], "test_code": r["test_code"],
+     "reference": r["reference"]}
+    for r in _load("mbpp")
+]
+
+CUSTOM = MATH + FACTS + LOGIC + CODE + FORMAT
+for _t in CUSTOM:
+    _t["source"] = "custom"
+
+TASKS = CUSTOM + GSM8K + HUMANEVAL + MBPP
 TASKS_BY_ID = {t["id"]: t for t in TASKS}

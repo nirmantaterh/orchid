@@ -29,7 +29,7 @@ import traceback
 from pathlib import Path
 
 from eval.graders import grade
-from eval.systems import CountingProvider, run_baseline, run_orchid
+from eval.systems import CountingProvider, RetryProvider, run_baseline, run_orchid
 from eval.tasks import TASKS
 
 
@@ -37,6 +37,11 @@ def _make_provider(args):
     if args.fake:
         from eval.fake_provider import FakeProvider
         return FakeProvider(seed=args.seed)
+    if args.base_url:
+        # Any OpenAI-compatible server: OpenRouter, a Kaggle/Colab Ollama, vLLM, ...
+        from goal_interpreter.providers.openai import OpenAIProvider
+        key = os.environ.get(args.api_key_env, "") or "none"
+        return OpenAIProvider(api_key=key, model=args.model, base_url=args.base_url)
     if args.ollama:
         from goal_interpreter.providers.openai import OpenAIProvider
         url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
@@ -47,7 +52,7 @@ def _make_provider(args):
         if not key:
             sys.exit("ANTHROPIC_API_KEY is not set")
         return AnthropicProvider(api_key=key, model=args.model)
-    sys.exit("Choose a backend: --ollama, --anthropic, or --fake")
+    sys.exit("Choose a backend: --ollama, --base-url URL, --anthropic, or --fake")
 
 
 def _done_keys(path: Path) -> set[tuple[str, str, int]]:
@@ -65,6 +70,9 @@ def main() -> None:
     ap.add_argument("--ollama", action="store_true")
     ap.add_argument("--anthropic", action="store_true")
     ap.add_argument("--fake", action="store_true", help="fake model, for testing the pipeline")
+    ap.add_argument("--base-url", default="", help="OpenAI-compatible endpoint, e.g. https://openrouter.ai/api/v1")
+    ap.add_argument("--api-key-env", default="OPENROUTER_API_KEY", help="env var holding the key for --base-url")
+    ap.add_argument("--retries", type=int, default=6, help="retries per LLM call on rate limits / server errors")
     ap.add_argument("--model", default="gemma4:e4b")
     ap.add_argument("--systems", default="baseline,orchid")
     ap.add_argument("--runs", type=int, default=3, help="repeats per task per system")
@@ -115,7 +123,7 @@ def main() -> None:
           f"systems={systems}  runs={args.runs}")
     print(f"{len(jobs) - len(todo)} already done, {len(todo)} to go -> {out}")
 
-    provider = CountingProvider(_make_provider(args))
+    provider = CountingProvider(RetryProvider(_make_provider(args), retries=args.retries))
     t_start = time.monotonic()
 
     with out.open("a", encoding="utf-8") as fh:
